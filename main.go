@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	mod "elastic/modules"
@@ -18,6 +19,8 @@ func main() {
 
 	podIndex := make(map[string]int64)
 	var currentRunningPods []string
+
+	var wg sync.WaitGroup
 
 	var podInfoSet []global.PodData
 	var systemInfoSet []global.SystemInfo
@@ -93,6 +96,38 @@ func main() {
 		if false {
 			fmt.Println(sortPriority)
 		}
+
+		wg.Add(len(podInfoSet))
+		for _, pod := range podInfoSet {
+			go func(pod global.PodData) {
+				defer wg.Done()
+
+				var isScaleCandidate bool
+				var isPauseContainer bool
+				if len(pod.Container) == 0 {
+					return
+				}
+				for _, scaleCandidate := range scaleUpCandidateList {
+					if pod.Name == scaleCandidate.PodName {
+						isScaleCandidate = true
+						break
+					}
+				}
+				if isScaleCandidate == false && pod.Container[0].Cgroup.CpuQuota == global.LIMIT_CPU_QUOTA {
+					scale.ContinueContainer(client, &pod.Container[0])
+				}
+				for _, pauseContainer := range pauseContainerList {
+					if pod.Name == pauseContainer.PodName {
+						isPauseContainer = true
+						break
+					}
+				}
+				if isPauseContainer == false && pod.Container[0].Cgroup.CpuQuota == global.LIMIT_CPU_QUOTA {
+					scale.ContinueContainer(client, &pod.Container[0])
+				}
+			}(pod)
+		}
+		wg.Wait()
 
 		podInfoSet = scale.DecisionScaleDown(client, podIndex, podInfoSet, currentRunningPods, systemInfoSet)
 		podInfoSet, scaleUpCandidateList, pauseContainerList = scale.DecisionScaleUp(client, podIndex, podInfoSet, currentRunningPods,

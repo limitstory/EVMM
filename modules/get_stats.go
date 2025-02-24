@@ -166,11 +166,12 @@ func getContainerStatsInfo(client internalapi.RuntimeService, podStats *pb.PodSa
 
 		var containerResource global.ContainerResourceData
 
-		_, err := client.ContainerStatus(context.TODO(), containerStats.Attributes.Id, false)
+		containerStatus, err := client.ContainerStatus(context.TODO(), containerStats.Attributes.Id, false)
 		if err != nil { // exception handling
 			fmt.Println(err)
 			return false
 		}
+		containerRes := containerStatus.Status.Resources
 
 		// init container data
 		if _, exists := pod.ContainerIndex[containerName]; !exists {
@@ -180,7 +181,9 @@ func getContainerStatsInfo(client internalapi.RuntimeService, podStats *pb.PodSa
 				continue
 			}
 		}
+
 		container := &pod.Container[pod.ContainerIndex[containerName]]
+		container.Cgroup.CpuQuota = containerRes.Linux.CpuQuota
 
 		// Detect if a container is restarted
 		if container.Attempt < containerStats.Attributes.Metadata.Attempt {
@@ -271,6 +274,7 @@ func InitContainerData(client internalapi.RuntimeService, pod *global.PodData, c
 	memoryRequest, _ := strconv.Atoi(memoryRequestStr)               // type conversion - string to int
 	memoryRequestToBytes := memoryRequest * 1048576                  // mibibyte to byte
 	containerRes.Linux.MemoryLimitInBytes = int64(memoryRequestToBytes)
+	containerRes.Linux.MemoryLimitInBytes = int64(global.MIN_SIZE_PER_CONTAINER)
 	UpdateContainerResources(client, container.Id, containerRes)
 
 	// get containerCgroupResources
