@@ -9,7 +9,7 @@ import (
 
 func GetPriorityMetric(podIndex map[string]int64, podInfoSet []global.PodData, currentRunningPods []string, systemInfoSet []global.SystemInfo) []global.PodData {
 	for _, podName := range currentRunningPods {
-		pod := podInfoSet[podIndex[podName]]
+		pod := &podInfoSet[podIndex[podName]]
 
 		// get priority metric of containers
 		for i, container := range pod.Container {
